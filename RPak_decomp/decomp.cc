@@ -249,13 +249,13 @@ char __fastcall decompress_rpak(__int64* a1, unsigned __int64 a2, unsigned __int
             v21 = ((unsigned int)(v20 - 31) >> 3) & 6;
             v22 = ((unsigned int)v17 >> v21) & 0x3F;
             v23 = v20 + ((v17 >> 4) & ((24 * (((unsigned int)(v20 - 31) >> 3) & 2)) >> 4));
-            v24 = v21 + LUT_0[v22 + 0x440];
+            v24 = v21 + LUT_440[v22];
             LOBYTE(v21) = v20 + ((v17 >> 4) & ((24 * (((unsigned int)(v20 - 31) >> 3) & 2)) >> 4));
             v25 = (1 << v21) + (((1 << v21) - 1) & (v17 >> v24));
             v16 += v24 + v23;
             v26 = a1[3];
             v17 >>= (unsigned __int8)v24 + (unsigned __int8)v23;
-            v27 = 16 * v25 - 16 + LUT_0[v22 + 0x400];
+            v27 = 16 * v25 - 16 + LUT_400[v22];
             v28 = v26 & (v6 - v27);
             v29 = (_QWORD*)(v80 + (v6 & v26));
             v30 = (char*)(v80 + v28);
@@ -414,5 +414,92 @@ char __fastcall decompress_rpak(__int64* a1, unsigned __int64 a2, unsigned __int
 LABEL_67:
     a1[10] = v6;
     a1[9] = v8;
+    return result;
+}
+
+__int64 __fastcall get_decompressed_size(__int64 params, uint8_t* file_buf, __int64 some_magic_shit, __int64 file_size, __int64 off_without_header_qm, __int64 header_size)
+{
+    __int64 v8; // r9
+    unsigned __int64 v9; // r11
+    char v10; // r8
+    int v11; // er8
+    __int64 v12; // rbx
+    unsigned int v13; // ebp
+    unsigned __int64 v14; // rbx
+    __int64 v15; // rax
+    unsigned int v16; // er9
+    unsigned __int64 v17; // r12
+    unsigned __int64 v18; // r11
+    unsigned __int64 v19; // r10
+    unsigned __int64 v20; // rax
+    int v21; // ebp
+    unsigned __int64 v22; // r10
+    unsigned int v23; // er9
+    __int64 v24; // rax
+    __int64 v25; // rsi
+    __int64 v26; // rdx
+    __int64 result; // rax
+    __int64 v28; // rdx
+    __int64 v29; // [rsp+48h] [rbp+18h]
+
+    v29 = some_magic_shit;
+    *(_QWORD*)params = _QWORD(file_buf);
+    *(_QWORD*)(params + 32) = off_without_header_qm + file_size;
+    *(_QWORD*)(params + 8) = 0i64;
+    *(_QWORD*)(params + 24) = 0i64;
+    *(_DWORD*)(params + 68) = 0;
+    *(_QWORD*)(params + 16) = some_magic_shit;
+    v8 = off_without_header_qm + header_size + 8;
+    v9 = *(_QWORD*)&file_buf[some_magic_shit & (off_without_header_qm + header_size)];
+    *(_QWORD*)(params + 80) = header_size;
+    *(_QWORD*)(params + 72) = v8;
+    v10 = v9;
+    v9 >>= 6;
+    v11 = v10 & 0x3F;
+    *(_QWORD*)(params + 40) = (1i64 << v11) | v9 & ((1i64 << v11) - 1);
+    v12 = *(_QWORD*)&file_buf[some_magic_shit & v8] << (64 - ((unsigned __int8)v11 + 6));
+    *(_QWORD*)(params + 72) = v8 + ((unsigned __int64)(unsigned int)(v11 + 6) >> 3);
+    v13 = ((v11 + 6) & 7) + 13;
+    v14 = (0xFFFFFFFFFFFFFFFFui64 >> ((v11 + 6) & 7)) & ((v9 >> v11) | v12);
+    v15 = v29 & *(_QWORD*)(params + 72);
+    v16 = (((_BYTE)v14 - 1) & 0x3F) + 1;
+    v17 = 0xFFFFFFFFFFFFFFFFui64 >> (64 - (unsigned __int8)v16);
+    *(_QWORD*)(params + 48) = v17;
+    v18 = 0xFFFFFFFFFFFFFFFFui64 >> (64 - ((((v14 >> 6) - 1) & 0x3F) + 1));
+    *(_QWORD*)(params + 56) = v18;
+    v19 = (v14 >> 13) | (*(_QWORD*)&file_buf[v15] << (64 - (unsigned __int8)v13));
+    v20 = v13;
+    v21 = v13 & 7;
+    *(_QWORD*)(params + 72) += v20 >> 3;
+    v22 = (0xFFFFFFFFFFFFFFFFui64 >> v21) & v19;
+    if (v17 == -1i64)
+    {
+        *(_DWORD*)(params + 64) = 0;
+        *(_QWORD*)(params + 88) = file_size;
+    }
+    else
+    {
+        v23 = v16 >> 3;
+        v24 = v29 & *(_QWORD*)(params + 72);
+        *(_DWORD*)(params + 64) = v23 + 1;
+        v25 = *(_QWORD*)&file_buf[v24] & ((1i64 << (8 * ((unsigned __int8)v23 + 1))) - 1);
+        *(_QWORD*)(params + 72) += v23 + 1;
+        *(_QWORD*)(params + 88) = v25;
+    }
+    *(_QWORD*)(params + 88) += off_without_header_qm;
+    v26 = *(_QWORD*)(params + 88);
+    *(_QWORD*)(params + 96) = v22;
+    *(_DWORD*)(params + 104) = v21;
+    *(_QWORD*)(params + 112) = v17 + off_without_header_qm - 6;
+    result = *(_QWORD*)(params + 40);
+    *(_DWORD*)(params + 108) = 0;
+    *(_QWORD*)(params + 120) = v26;
+    *(_QWORD*)(params + 128) = result;
+    if ((((unsigned __int8)(v14 >> 6) - 1) & 0x3F) != -1i64 && result - 1 > v18)
+    {
+        v28 = v26 - *(unsigned int*)(params + 64);
+        *(_QWORD*)(params + 128) = v18 + 1;
+        *(_QWORD*)(params + 120) = v28;
+    }
     return result;
 }

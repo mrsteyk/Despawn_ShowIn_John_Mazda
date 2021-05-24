@@ -2,7 +2,10 @@
 #include <vector>
 #include <fstream>
 
+#include <cinttypes>
+
 char __fastcall decompress_rpak(__int64* a1, unsigned __int64 a2, unsigned __int64 a3);
+__int64 __fastcall get_decompressed_size(__int64 params, uint8_t* file_buf, __int64 some_magic_shit, __int64 file_size, __int64 off_without_header_qm, __int64 header_size);
 
 constexpr bool TF2 = true; // or define?
 
@@ -70,7 +73,7 @@ int main(int argc, char* argv[])
 
     std::printf("Working on: %s\n", argv[1]);
 
-    std::string file_name = argv[1];
+    const std::string file_name = argv[1];
 
     std::vector<uint8_t> input;
 
@@ -109,6 +112,40 @@ int main(int argc, char* argv[])
         }
         // ---
         std::printf("\nFile size on disk: %lld\nFile size decompressed: %lld\n", pak_hdr->size_disk, pak_hdr->size_decomp);
-        std::printf("Compress ratio: %.02f\n", (pak_hdr->size_disk*100.f)/pak_hdr->size_decomp);
+        std::printf("Compress ratio (disk/mem): %.02f\n", (pak_hdr->size_disk*100.f)/pak_hdr->size_decomp);
+        // ---
+        std::printf("Type? %016" PRIx64 "\n", pak_hdr->type);
+    }
+
+    std::putchar('\n');
+
+    // actual decompression based on decomp from IDA
+    {
+        // __int64 v9[18]; from sub_180004B00 aka lemme not do LTO properly?..
+        u64 parameters[18];
+        auto dsize = get_decompressed_size(u64(parameters), input.data(), -1i64, input.size(), 0, HEADER_SIZE);
+        if (dsize != pak_hdr->size_decomp) {
+            std::printf("DSize was %llu expected %llu\n", dsize, pak_hdr->size_decomp);
+        }
+        else {
+            std::printf("DSize is %llu\n", dsize);
+        }
+
+        std::vector<uint8_t> decompress_buffer(0x400000, 0);
+
+        parameters[1] = u64(decompress_buffer.data());
+        parameters[3] = -1i64;
+        auto dret = decompress_rpak((long long*)parameters, input.size(), decompress_buffer.size());
+        std::printf("If you see this decompression was gucci? %d %llu\n", +dret, parameters[5]);
+
+        if (dret != 1) {
+            std::printf("DRet was %d!\n", +dret);
+            return -1;
+        }
+
+        const auto out_fname = file_name + ".raw";
+        std::ofstream out(out_fname, std::fstream::binary);
+        out.write((char*)decompress_buffer.data(), parameters[5]);
+        std::printf("Wrote unpacked file to %s\n", out_fname.c_str());
     }
 }
