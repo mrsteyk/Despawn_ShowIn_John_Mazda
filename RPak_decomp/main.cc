@@ -176,8 +176,11 @@ int main(int argc, char* argv[])
         }
 
         // we speak offsets here...
+        auto starpak_other = HEADER_SIZE;
+        std::printf("StarPak is      \"%s\"\n", rpak_data.data() + starpak_other);
+
         auto starpak_name = HEADER_SIZE + (16ui64 * pak_hdr->skip_16); // TODO: figure out why game has such weird logic and wtf is this...
-        std::printf("StarPak is \"%s\"\n", rpak_data.data() + starpak_name);
+        std::printf("StarPak? is     \"%s\"\n", rpak_data.data() + starpak_name);
 
         auto second_starpak_qm = starpak_name + (2ui64 * pak_hdr->skip_16); // WHAT ON FUCKING EARTH IS THIS
         std::printf("2nd? StarPak is \"%s\"\n", rpak_data.data() + second_starpak_qm);
@@ -185,26 +188,55 @@ int main(int argc, char* argv[])
         auto internal_start = second_starpak_qm + pak_hdr->skip_shit;
 
         // Internal parser
+        class InternalBufferShit
         {
-            class InternalBufferShit
-            {
-            public:
-                uint32_t base_qm; //0x0000
-                uint32_t align_byte; //0x0004
-                uint64_t size_unaligned; //0x0008
-            }; //Size: 0x0010
-
-            auto internals = (InternalBufferShit*)(rpak_data.data() + internal_start);
+        public:
+            uint32_t base_qm; //0x0000
+            uint32_t align_byte; //0x0004
+            uint64_t size_unaligned; //0x0008
+        }; //Size: 0x0010
+        auto internals = (InternalBufferShit*)(rpak_data.data() + internal_start);
+        {
             for (int i = 0; i < pak_hdr->internal_shit_size; i++) {
-                std::printf("Internal shit [%d] : base_qm %08X | align_byte %08X | size_unaligned %p\n", i, internals[i].base_qm, internals[i].align_byte, internals[i].size_unaligned);
+                auto idkwhat = internals[i].base_qm & 3;
+                std::printf("Internal shit [%d] : base_qm %08X(%u) | align_byte %08X | size_unaligned %p\n", i, internals[i].base_qm, idkwhat, internals[i].align_byte, internals[i].size_unaligned);
+                /*if (idkwhat)
+                {
+                    auto v21 = internals[i].align_byte; //*(unsigned int*)(v19 + 4);
+                    auto v22 = idkwhat;
+                    auto v23 = v58[idkwhat];
+                    auto v24 = ~(v21 - 1) & (v21 - 1 + v59[v22]);
+                    v60[i] = v24;
+                    auto v25 = internals[i].size_unaligned + v24;
+                    if (v23 < (unsigned int)v21)
+                        v23 = v21;
+                    v59[v22] = v25;
+                    v58[v22] = v23;
+                }*/
             }
+
+            //for (size_t i = 0; i < 4; i++) {
+            //    std::printf("\t %p | %08X | %08X\n", v60[i], v58[i], v59[i]);
+            //}
         }
 
         auto internal_shit_skipped = internal_start + (16ui64 * pak_hdr->internal_shit_size);
 
         // TODO: parse unk3c's struct
         // TODO: 12 bytes struct
-        std::printf("TODO: parse unk3c's 12b [%llu] @ %p\n", pak_hdr->unk3c, internal_shit_skipped);
+        //std::printf("TODO: parse unk3c's 12b [%llu] @ %p\n", pak_hdr->unk3c, internal_shit_skipped);
+        struct unk3c_s {
+            u32 idk0;
+            u32 idk4;
+            u32 idk8; // used in some *(_QWORD *)(v1 + 0x550) = v20[2];
+        };
+        auto unk3c_elems = (unk3c_s*)(rpak_data.data() + internal_shit_skipped);
+        {
+            for (int i = 0; i < pak_hdr->unk3c; i++) {
+                const auto& e = unk3c_elems[i];
+                std::printf("Unk3c[%03u]: %03u(%u) %05u %08X\n", i, e.idk0, internals[e.idk0].base_qm&3, e.idk4, e.idk8);
+            }
+        }
 
         auto unk3c_skipped = internal_shit_skipped + (12ui64 * pak_hdr->unk3c);
 
@@ -243,7 +275,7 @@ int main(int argc, char* argv[])
                 auto hash = file.hash;
                 u32 short_name[2]{ *(u32*)file.short_name, 0 };
                 // 0x2a looks like how much shit's referenced...
-                std::printf("File[%03d]: hash %p | type %4s | 0x2a %u\n", i, hash, short_name, file.unk2a);
+                std::printf("File[%03d]: hash %p | type %4s | 0x2a %u | \n", i, hash, short_name, file.unk2a);
             }
         }
 
@@ -313,5 +345,38 @@ int main(int argc, char* argv[])
         */
 
         std::printf("Left @ %p | %p\n", unk54_skipped, (rpak_data.size() - unk54_skipped));
+
+        std::printf("\nFiles start and shit...\n");
+        {
+            std::vector<u32> file_seeks(pak_hdr->unk3c);
+
+            auto tmp_skip = unk54_skipped;
+            for (int i = 0; i < pak_hdr->unk3c; i++) {
+                const auto& e = unk3c_elems[i];
+                file_seeks[i] = tmp_skip;
+                std::printf("Data[%03d]@%p: type %u? | size %p | align? %02X\n", i, tmp_skip, e.idk0, e.idk8, e.idk4);
+
+                tmp_skip += e.idk8;
+            }
+
+            {
+                char k0k[260];
+                for (int i = 0; i < pak_hdr->num_file_entries; i++) {
+                    const auto& file = g_files[i];
+                    u32 short_name[2]{ *(u32*)file.short_name, 0 };
+
+                    auto offset = file_seeks[file.unk18] + file.unk1c;
+                    auto size = unk3c_elems[file.unk18].idk8;
+
+                    std::printf("Writing/dry %03d off %p size %p...\n", i, offset, size);
+                    sprintf_s(k0k, "%s.%s%03d", argv[1], short_name, i);
+                    
+                    if (argc > 2 && argv[2][0] == '1') {
+                        std::ofstream outf(k0k, std::fstream::binary);
+                        outf.write((const char*)rpak_data.data() + offset, size);
+                    }
+                }
+            }
+        }
     }
 }
