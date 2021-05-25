@@ -120,7 +120,7 @@ int main(int argc, char* argv[])
         std::printf("Internal shit size (struct of 16 bytes, max 4): %u\n", pak_hdr->internal_shit_size);
         if (pak_hdr->internal_shit_size > 4) {
             std::printf("[assert-y] Such file shouldn't exist????\n\n");
-            return -2;
+            //return -2;
         }
     }
 
@@ -359,11 +359,19 @@ int main(int argc, char* argv[])
                 tmp_skip += e.idk8;
             }
 
+            std::printf("Debug info: g_files[%u] unk3c_elems[%u]\n", pak_hdr->num_file_entries, pak_hdr->unk3c);
+
             {
                 char k0k[260];
                 for (int i = 0; i < pak_hdr->num_file_entries; i++) {
                     const auto& file = g_files[i];
                     u32 short_name[2]{ *(u32*)file.short_name, 0 };
+
+                    std::printf("File[%03u](%03i) %4s ", i, file.unk18, short_name);
+                    if (file.unk18 == 0xFFFFFFFF) {
+                        std::putchar('\n');
+                        continue;
+                    }
 
                     auto offset = file_seeks[file.unk18] + file.unk1c;
                     auto size = unk3c_elems[file.unk18].idk8;
