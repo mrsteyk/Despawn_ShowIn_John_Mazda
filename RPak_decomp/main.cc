@@ -177,10 +177,10 @@ int main(int argc, char* argv[])
 
         // we speak offsets here...
         auto starpak_name = HEADER_SIZE + (16ui64 * pak_hdr->skip_16); // TODO: figure out why game has such weird logic and wtf is this...
-        std::printf("StarPak is %s\n", rpak_data.data() + starpak_name);
+        std::printf("StarPak is \"%s\"\n", rpak_data.data() + starpak_name);
 
         auto second_starpak_qm = starpak_name + (2ui64 * pak_hdr->skip_16); // WHAT ON FUCKING EARTH IS THIS
-        std::printf("2nd? StarPak is %s\n", rpak_data.data() + second_starpak_qm);
+        std::printf("2nd? StarPak is \"%s\"\n", rpak_data.data() + second_starpak_qm);
 
         auto internal_start = second_starpak_qm + pak_hdr->skip_shit;
 
@@ -204,48 +204,114 @@ int main(int argc, char* argv[])
 
         // TODO: parse unk3c's struct
         // TODO: 12 bytes struct
+        std::printf("TODO: parse unk3c's 12b [%llu] @ %p\n", pak_hdr->unk3c, internal_shit_skipped);
 
         auto unk3c_skipped = internal_shit_skipped + (12ui64 * pak_hdr->unk3c);
 
         // TODO: parse unk40's struct
         // TODO: 8 bytes struct
+        std::printf("TODO: parse unk40's 8b [%llu] @ %p\n", pak_hdr->unk40, unk3c_skipped);
 
         auto unk40_skipped = unk3c_skipped + (8ui64 * pak_hdr->unk40);
 
         // parse file entries
+        class FileEntryShit
         {
-            class FileEntryShit
-            {
-            public:
-                uint64_t hash; //0x0000
-                char pad_0008[8]; //0x0008
-                uint32_t array_idx; //0x0010
-                uint32_t array_entry_offset; //0x0014
-                uint32_t N00000470; //0x0018
-                uint32_t N00000AD1; //0x001C
-                char pad_0020[8]; //0x0020
-                uint16_t N00000472; //0x0028
-                uint16_t N000005EC; //0x002A
-                char pad_002C[4]; //0x002C
-                uint32_t start_idx; //0x0030
-                char pad_0034[4]; //0x0034
-                uint32_t count; //0x0038
-                char pad_003C[8]; //0x003C
-                char short_name[4]; //0x0044 // erm...
-            }; //Size: 0x0048
-
-            auto files = (FileEntryShit*)(rpak_data.data() + unk40_skipped);
+        public:
+            uint64_t hash; //0x0000
+            char pad_0008[8]; //0x0008
+            uint32_t array_idx; //0x0010
+            uint32_t array_entry_offset; //0x0014
+            uint32_t unk18; //0x0018
+            uint32_t unk1c; //0x001C
+            char pad_0020[8]; //0x0020
+            uint16_t unk28; //0x0028
+            uint16_t unk2a; //0x002A
+            uint32_t unk2c; //0x002C
+            uint32_t start_idx; //0x0030
+            uint32_t unk34; //0x0034
+            uint32_t count; //0x0038
+            char pad_003C[8]; //0x003C
+            char short_name[4]; //0x0044 // erm...
+        }; //Size: 0x0048
+        FileEntryShit* g_files;
+        {
+            g_files = (FileEntryShit*)(rpak_data.data() + unk40_skipped);
             for (int i = 0; i < pak_hdr->num_file_entries; i++) {
-                const auto& file = files[i];
+                const auto& file = g_files[i];
                 
                 auto hash = file.hash;
                 u32 short_name[2]{ *(u32*)file.short_name, 0 };
-                std::printf("File[%03d]: hash %p | type %4s\n", i, hash, short_name);
+                // 0x2a looks like how much shit's referenced...
+                std::printf("File[%03d]: hash %p | type %4s | 0x2a %u\n", i, hash, short_name, file.unk2a);
             }
         }
 
         auto file_entries_skipped = unk40_skipped + (72ui64 * pak_hdr->num_file_entries);
 
-        std::printf("Left @ %p\n", file_entries_skipped);
+        // TODO: parse unk48's struct
+        // TODO: 8 bytes struct
+        //std::printf("TODO: parse unk48's 8b [%llu] @ %p\n", pak_hdr->unk48, file_entries_skipped);
+        {
+            struct idk {
+                u32 idk1;
+                u32 idk2;
+            };
+
+            auto idks = (idk*)(rpak_data.data() + file_entries_skipped);
+
+            for (int i = 0; i < pak_hdr->unk48; i++) {
+                auto& e = idks[i];
+                std::printf("unk48[%03d]: %05u | %08X\n", i, e.idk1, e.idk2);
+            }
+        }
+
+        auto unk48_skipped = file_entries_skipped + (8ui64 * pak_hdr->unk48);
+
+        // TODO: parse unk4c's struct
+        // TODO: 4 bytes struct
+        //std::printf("TODO: parse unk4c's 4b [%llu] @ %p\n", pak_hdr->unk4c, unk48_skipped);
+        {
+            auto items = (u32*)(rpak_data.data() + unk48_skipped);
+            /*for (int i = 0; i < pak_hdr->unk4c; i++) {
+                std::printf("Unk4c Relation[%03d]: hash %p\n", i, g_files[items[i]].hash);
+            }*/
+            std::puts("--- Relations BEG ---");
+            for (int i = 0; i < pak_hdr->num_file_entries; i++) {
+                const auto& file = g_files[i];
+                for (int j = 0; j < file.unk34; j++) {
+                    auto file_idx = items[j + file.unk2c];
+
+                    auto& rel_file = g_files[file_idx];
+                    u32 short_name[2]{ *(u32*)rel_file.short_name, 0 };
+                    std::printf("File[%03d] relates (%u/%u) to File[%03d] with hash %p type %4s\n", i, j, file.unk34, file_idx, rel_file.hash, short_name);
+                }
+            }
+            std::puts("--- Relations END ---");
+        }
+
+        auto unk4c_skipped = unk48_skipped + (4ui64 * pak_hdr->unk4c);
+
+        // TODO: parse unk50's struct
+        // TODO: 4 bytes struct
+        std::printf("TODO: parse unk50's 4b [%llu] @ %p\n", pak_hdr->unk50, unk4c_skipped);
+
+        auto unk50_skipped = unk4c_skipped + (4ui64 * pak_hdr->unk50);
+
+        // TODO: parse unk54's struct
+        // TODO: 1 bytes struct
+        std::printf("TODO: parse unk54's 1b [%llu] @ %p\n", pak_hdr->unk54, unk50_skipped);
+
+        auto unk54_skipped = unk50_skipped + pak_hdr->unk54;
+
+        // TODO: skip_16 not zero logic here...
+        /*
+        if ( pak_hdr->skip_16 ) {
+            unk54_skipped = v25 + *v5;
+            a2[11] = unk50_skipped;
+        }
+        */
+
+        std::printf("Left @ %p | %p\n", unk54_skipped, (rpak_data.size() - unk54_skipped));
     }
 }
