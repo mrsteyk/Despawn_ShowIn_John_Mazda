@@ -1,0 +1,3 @@
+LIBRARY rtech_game
+EXPORTS
+	Pak_SetLoadFuncs	@1

@@ -46,13 +46,13 @@ struct rpack_hdr {
 
     u64 unk30; // pad
 
-    u16 unk38; // v24 = *(unsigned __int16 *)&v43[0x38] + ...
-    u16 unk3a; // v23 = *(unsigned __int16 *)&v43[0x3A];
-    u16 unk3c; // v22 = *(unsigned __int16 *)&v43[0x3C];
-    u16 unk3e; // v20 = *(unsigned __int16 *)&v43[0x3E]; | + ((_WORD)v20 != 0 ? 8 : 0) | * (v20 + ...
+    u16 skip_shit; // how much to skip for actual asset entries | v24 = *(unsigned __int16 *)&v43[0x38] + ...
+    u16 internal_shit_size; // internal_shit_size, has base?, align_byte, size_unaligned | v23 = *(unsigned __int16 *)&v43[0x3A];
+    u16 unk3c; // 12 byte struct | v22 = *(unsigned __int16 *)&v43[0x3C];
+    u16 skip_16; // skip 16 bytes of that, v20 = *(unsigned __int16 *)&v43[0x3E]; | + ((_WORD)v20 != 0 ? 8 : 0) | * (v20 + ...
 
     u32 unk40;
-    u32 unk44; // v18 = 8i64 * *(unsigned int *)&v43[0x44]; *((_DWORD *)v2 + 3) = *(_DWORD *)&v43[0x44];
+    u32 num_file_entries; // seems to match what legion tells or some other name but premise is the same... | v18 = 8i64 * *(unsigned int *)&v43[0x44]; *((_DWORD *)v2 + 3) = *(_DWORD *)&v43[0x44];
     u32 unk48;
     u32 unk4c;
 
@@ -67,7 +67,7 @@ static_assert(sizeof(rpack_hdr) == HEADER_SIZE, "Header size missmatch!");
 int main(int argc, char* argv[])
 {
     if (argc < 2) {
-        std::printf("Usage:\n%s PAK\n", argv[0]);
+        std::printf("Usage:\n%s PAK writeDecompressed[0/1]\n", argv[0]);
         return -1;
     }
 
@@ -115,10 +115,22 @@ int main(int argc, char* argv[])
         std::printf("Compress ratio (disk/mem): %.02f\n", (pak_hdr->size_disk*100.f)/pak_hdr->size_decomp);
         // ---
         std::printf("Type? %016" PRIx64 "\n", pak_hdr->type);
+        // ---
+        std::printf("Number of files inside?: %u\n", pak_hdr->num_file_entries);
+        std::printf("Internal shit size (struct of 16 bytes, max 4): %u\n", pak_hdr->internal_shit_size);
+        if (pak_hdr->internal_shit_size > 4) {
+            std::printf("[assert-y] Such file shouldn't exist????\n\n");
+            return -2;
+        }
     }
 
-    std::putchar('\n');
+    std::puts("\n---\n");
 
+    std::vector<uint8_t> rpak_data;
+    if ((pak_hdr->flag.is_compressed & 1) != 1) {
+        std::printf("!!! RPak is uncompressed !!!\n");
+        rpak_data = input;
+    } else
     // actual decompression based on decomp from IDA
     {
         // __int64 v9[18]; from sub_180004B00 aka lemme not do LTO properly?..
@@ -131,7 +143,7 @@ int main(int argc, char* argv[])
             std::printf("DSize is %llu\n", dsize);
         }
 
-        std::vector<uint8_t> decompress_buffer(0x400000, 0);
+        std::vector<uint8_t> decompress_buffer(pak_hdr->size_decomp, 0); //(0x400000, 0);
 
         parameters[1] = u64(decompress_buffer.data());
         parameters[3] = -1i64;
@@ -143,9 +155,97 @@ int main(int argc, char* argv[])
             return -1;
         }
 
-        const auto out_fname = file_name + ".raw";
-        std::ofstream out(out_fname, std::fstream::binary);
-        out.write((char*)decompress_buffer.data(), parameters[5]);
-        std::printf("Wrote unpacked file to %s\n", out_fname.c_str());
+        if (argc > 2 && argv[2][0] == '1') {
+            const auto out_fname = file_name + ".raw";
+            std::ofstream out(out_fname, std::fstream::binary);
+            out.write((char*)decompress_buffer.data(), parameters[5]);
+            std::printf("Wrote unpacked file to %s\n", out_fname.c_str());
+        }
+
+        rpak_data = std::move(decompress_buffer); // avoid copy?
+
+        std::puts("\n---\n");
+    }
+
+    // actual parse
+    {
+        std::printf("skip_16: %u\n", int(pak_hdr->skip_16));
+        if (pak_hdr->skip_16 != 0) {
+            std::printf("[assert-y] skip_16 wasn't 0!\n");
+            return -2;
+        }
+
+        // we speak offsets here...
+        auto starpak_name = HEADER_SIZE + (16ui64 * pak_hdr->skip_16); // TODO: figure out why game has such weird logic and wtf is this...
+        std::printf("StarPak is %s\n", rpak_data.data() + starpak_name);
+
+        auto second_starpak_qm = starpak_name + (2ui64 * pak_hdr->skip_16); // WHAT ON FUCKING EARTH IS THIS
+        std::printf("2nd? StarPak is %s\n", rpak_data.data() + second_starpak_qm);
+
+        auto internal_start = second_starpak_qm + pak_hdr->skip_shit;
+
+        // Internal parser
+        {
+            class InternalBufferShit
+            {
+            public:
+                uint32_t base_qm; //0x0000
+                uint32_t align_byte; //0x0004
+                uint64_t size_unaligned; //0x0008
+            }; //Size: 0x0010
+
+            auto internals = (InternalBufferShit*)(rpak_data.data() + internal_start);
+            for (int i = 0; i < pak_hdr->internal_shit_size; i++) {
+                std::printf("Internal shit [%d] : base_qm %08X | align_byte %08X | size_unaligned %p\n", i, internals[i].base_qm, internals[i].align_byte, internals[i].size_unaligned);
+            }
+        }
+
+        auto internal_shit_skipped = internal_start + (16ui64 * pak_hdr->internal_shit_size);
+
+        // TODO: parse unk3c's struct
+        // TODO: 12 bytes struct
+
+        auto unk3c_skipped = internal_shit_skipped + (12ui64 * pak_hdr->unk3c);
+
+        // TODO: parse unk40's struct
+        // TODO: 8 bytes struct
+
+        auto unk40_skipped = unk3c_skipped + (8ui64 * pak_hdr->unk40);
+
+        // parse file entries
+        {
+            class FileEntryShit
+            {
+            public:
+                uint64_t hash; //0x0000
+                char pad_0008[8]; //0x0008
+                uint32_t array_idx; //0x0010
+                uint32_t array_entry_offset; //0x0014
+                uint32_t N00000470; //0x0018
+                uint32_t N00000AD1; //0x001C
+                char pad_0020[8]; //0x0020
+                uint16_t N00000472; //0x0028
+                uint16_t N000005EC; //0x002A
+                char pad_002C[4]; //0x002C
+                uint32_t start_idx; //0x0030
+                char pad_0034[4]; //0x0034
+                uint32_t count; //0x0038
+                char pad_003C[8]; //0x003C
+                char short_name[4]; //0x0044 // erm...
+            }; //Size: 0x0048
+
+            auto files = (FileEntryShit*)(rpak_data.data() + unk40_skipped);
+            for (int i = 0; i < pak_hdr->num_file_entries; i++) {
+                const auto& file = files[i];
+                
+                auto hash = file.hash;
+                u32 short_name[2]{ *(u32*)file.short_name, 0 };
+                std::printf("File[%03d]: hash %p | type %4s\n", i, hash, short_name);
+            }
+        }
+
+        auto file_entries_skipped = unk40_skipped + (72ui64 * pak_hdr->num_file_entries);
+
+        std::printf("Left @ %p\n", file_entries_skipped);
     }
 }

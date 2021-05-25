@@ -7,6 +7,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "RPak_decomp", "RPak_decomp\
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AssetHashing", "AssetHashing\AssetHashing.vcxproj", "{D9EE16B0-4032-48C7-95C1-C74973547A25}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "rtech_game", "rtech_game\rtech_game.vcxproj", "{29CDC957-8662-4A4C-A39E-B05DCDBCE518}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -31,6 +33,14 @@ Global
 		{D9EE16B0-4032-48C7-95C1-C74973547A25}.Release|x64.Build.0 = Release|x64
 		{D9EE16B0-4032-48C7-95C1-C74973547A25}.Release|x86.ActiveCfg = Release|Win32
 		{D9EE16B0-4032-48C7-95C1-C74973547A25}.Release|x86.Build.0 = Release|Win32
+		{29CDC957-8662-4A4C-A39E-B05DCDBCE518}.Debug|x64.ActiveCfg = Debug|x64
+		{29CDC957-8662-4A4C-A39E-B05DCDBCE518}.Debug|x64.Build.0 = Debug|x64
+		{29CDC957-8662-4A4C-A39E-B05DCDBCE518}.Debug|x86.ActiveCfg = Debug|Win32
+		{29CDC957-8662-4A4C-A39E-B05DCDBCE518}.Debug|x86.Build.0 = Debug|Win32
+		{29CDC957-8662-4A4C-A39E-B05DCDBCE518}.Release|x64.ActiveCfg = Release|x64
+		{29CDC957-8662-4A4C-A39E-B05DCDBCE518}.Release|x64.Build.0 = Release|x64
+		{29CDC957-8662-4A4C-A39E-B05DCDBCE518}.Release|x86.ActiveCfg = Release|Win32
+		{29CDC957-8662-4A4C-A39E-B05DCDBCE518}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
