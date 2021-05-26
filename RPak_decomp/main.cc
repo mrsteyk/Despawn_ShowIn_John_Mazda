@@ -377,10 +377,60 @@ int main(int argc, char* argv[])
                     auto size = unk3c_elems[file.unk18].idk8;
 
                     std::printf("Writing/dry %03d off %p size %p...\n", i, offset, size);
-                    sprintf_s(k0k, "%s.%s%03d", argv[1], short_name, i);
+                    sprintf_s(k0k, "%s.%03d.0x%p.%s", argv[1], i, file.hash, short_name);
                     
                     if (argc > 2 && argv[2][0] == '1') {
-                        std::ofstream outf(k0k, std::fstream::binary);
+                        std::ofstream outf; // (k0k, std::fstream::binary);
+                        // texture
+                        if (short_name[0] == 0x72747874) {
+                            //hacky...
+                            short_name[0] = 'sdd';//"dds"
+                            sprintf_s(k0k, "%s.%03d.0x%p.%s", argv[1], i, file.hash, short_name);
+
+                            outf = std::ofstream(k0k, std::fstream::binary);
+
+                            class TextureLoadA1
+                            {
+                            public:
+                                uint64_t hash; //0x0000
+                                char* texture_name; //0x0008 // name IDX in reality...
+                                uint16_t width; //0x0010
+                                uint16_t height; //0x0012
+                                char pad_0014[2]; //0x0014
+                                uint16_t texture_type; //0x0016
+                                char pad_0018[9]; //0x0018
+                                uint8_t mipmaps; //0x0021
+                                uint8_t unk22; //0x0022
+                            }; //Size: 0x012C
+                            uint8_t dds_header[]{
+                                0x44, 0x44, 0x53, 0x20, 0x7C, 0x00, 0x00, 0x00, 0x07, 0x10, 0x0A, 0x00, 0x38, 0x04, 0x00, 0x00, 0x80, 0x07, 0x00, 0x00, 0x00, 0xD2, 0x0F, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x44, 0x58, 0x54, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+                            };
+
+                            auto texture_info = (TextureLoadA1*)(rpak_data.data() + file_seeks[file.array_idx] + file.array_entry_offset);
+
+                            if (texture_info->texture_type == 1 && texture_info->mipmaps == 1) {
+                                auto lobyte_ = 8ui64;
+                                auto hibyte_ = 4ui64;
+
+                                auto pitchOrLinearSize = lobyte_ * ((texture_info->width + hibyte_ - 1) >> (hibyte_ >> 1)) * ((texture_info->height + hibyte_ - 1) >> (hibyte_ >> 1));
+
+                                // DDS...
+                                *(u32*)(dds_header + 0xC) = texture_info->height;
+                                *(u32*)(dds_header + 0x10) = texture_info->width;
+
+                                *(u32*)(dds_header + 0x14) = pitchOrLinearSize;
+
+                                std::printf("\t Type: %u | %u %u | %ux%u | %08X\n", texture_info->texture_type, texture_info->mipmaps, texture_info->unk22, texture_info->width, texture_info->height, pitchOrLinearSize);
+
+                                outf.write((const char*)dds_header, sizeof(dds_header));
+                            } else {
+                                std::printf("\t\tDON'T KNOW HOW TO DUMP!\n");
+                            }
+                        }
+                        // Can't prettify this format, write as is...
+                        else {
+                            outf = std::ofstream(k0k, std::fstream::binary);
+                        }
                         outf.write((const char*)rpak_data.data() + offset, size);
                     }
                 }
