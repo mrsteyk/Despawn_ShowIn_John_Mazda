@@ -26,7 +26,7 @@ public:
     char* name; //0x0008
     void* LoadDispatch; //0x0010 // functions like CreateTexture
     void* func1; //0x0018
-    void* func2; //0x0020
+    void* func2; //0x0020 // for texture this is responsible for adding it to rpak list
     void* chunk_ptr_size_of_elems_times_count; //0x0028
     char pad_0030[4]; //0x0030
     uint32_t elem_size; //0x0034
@@ -94,7 +94,7 @@ __int64 __fastcall open_file(const CHAR* a1, LARGE_INTEGER* a2) {
     auto bruh = a2 ? a2->QuadPart : 0i64;
 
     std::printf("open_file(%s, %p) = %p | %p\n", a1, a2, ret, bruh);
-    g_isRPak[ret] = pair_rpak_t{ !!strstr(a1, ".rpak"), a1 };
+    g_isRPak[ret] = pair_rpak_t{ strstr(a1, ".rpak") || strstr(a1, ".starpak"), a1 };
 
     return ret;
 }
@@ -137,7 +137,7 @@ __int64 __fastcall unk_3(void* Src, __int64 a2, int a3) {
 __int64 __fastcall read_from_file_bs(unsigned int a1, __int64 a2, unsigned __int64 a3, __int64 a4, int a5) {
     auto ret = reinterpret_cast<decltype(&read_from_file_bs)>(orig[27])(a1, a2, a3, a4, a5);
 
-    if(g_isRPak[a1].first)
+    if(g_isRPak[a1].first && g_isRPak[a1].second.find(".starpak") != std::string::npos)
         std::printf("read_from_file_bs(%s, %p, %p, %p, %u) = %p | %p\n", g_isRPak[a1].second.c_str(), a2, a3, a4, a5, ret, _ReturnAddress());
 
     return ret;
@@ -150,6 +150,22 @@ __int64 __fastcall decompress_rpak_hk(__int64* a1, unsigned __int64 a2, unsigned
     std::printf("decompress_rpak to %p\n", a1[1]);
 
     return ret;
+}
+
+__int64 __fastcall some_file_io_internal(unsigned int a1, __int64 a2, unsigned __int64 a3, __int64 a4, __int64 a5, __int64 a6, int a7) {
+    auto ret = reinterpret_cast<decltype(&some_file_io_internal)>(orig[28])(a1, a2, a3, a4, a5, a6, a7);
+
+    if (g_isRPak.find(a1) != g_isRPak.end() && g_isRPak[a1].first && g_isRPak[a1].second.find(".starpak") != std::string::npos)
+        std::printf("some_file_io_internal(%s, %p, %p, %p, o, o, %u) = %p | %p\n", g_isRPak[a1].second.c_str(), a2, a3, a4, a7, ret, _ReturnAddress());
+
+    return ret;
+}
+
+void __fastcall sub_180007D50(int a1, int short_name, __int64 a3) {
+
+    std::printf("sub_180007D50(%u, %08X, %p) | %p\n", a1, short_name, a3, _ReturnAddress());
+
+    reinterpret_cast<decltype(&sub_180007D50)>(orig[16])(a1, short_name, a3);
 }
 
 extern "C" //__declspec(dllexport)
@@ -211,7 +227,14 @@ void __fastcall Pak_SetLoadFuncs(uintptr_t * a1, uintptr_t b, uintptr_t c) {
 
     //MH_CreateHook(PVOID(g_base + 0x4EA0), &decompress_rpak_hk, &decompress_rpak);
 
+    //MH_CreateHook(PVOID(g_base + 0x1F40), &some_file_io_internal, (PVOID*)&orig[28]);
+
+    MH_CreateHook(PVOID(a1[16]), &sub_180007D50, (PVOID*)&orig[16]);
+
     MH_EnableHook(MH_ALL_HOOKS);
+
+    //while (!IsDebuggerPresent())
+    //    Sleep(100);
 
     // */
 }

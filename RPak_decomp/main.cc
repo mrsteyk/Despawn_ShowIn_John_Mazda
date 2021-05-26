@@ -256,7 +256,8 @@ int main(int argc, char* argv[])
             uint32_t array_entry_offset; //0x0014
             uint32_t unk18; //0x0018
             uint32_t unk1c; //0x001C
-            char pad_0020[8]; //0x0020
+            //char pad_0020[8]; //0x0020
+            u64 starpak_offset;
             uint16_t unk28; //0x0028
             uint16_t unk2a; //0x002A
             uint32_t unk2c; //0x002C
@@ -383,12 +384,6 @@ int main(int argc, char* argv[])
                         std::ofstream outf; // (k0k, std::fstream::binary);
                         // texture
                         if (short_name[0] == 0x72747874) {
-                            //hacky...
-                            short_name[0] = 'sdd';//"dds"
-                            sprintf_s(k0k, "%s.%03d.0x%p.%s", argv[1], i, file.hash, short_name);
-
-                            outf = std::ofstream(k0k, std::fstream::binary);
-
                             class TextureLoadA1
                             {
                             public:
@@ -408,7 +403,22 @@ int main(int argc, char* argv[])
 
                             auto texture_info = (TextureLoadA1*)(rpak_data.data() + file_seeks[file.array_idx] + file.array_entry_offset);
 
-                            if (texture_info->texture_type == 1 && texture_info->mipmaps == 1) {
+                            // indicates streaming bullshit
+                            if (texture_info->unk22) {
+                                std::printf("\tStarPak offset: %p\n", file.starpak_offset);
+                            }
+
+                            //hacky...
+                            bool canDump = texture_info->texture_type == 1 && texture_info->mipmaps == 1;
+                            bool dump2 = texture_info->texture_type == 1 && texture_info->mipmaps == 9 && texture_info->unk22 == 3 && (texture_info->width == 2048 && texture_info->height == 2048);
+                            if (canDump || dump2) {
+                                short_name[0] = 'sdd';//"dds"
+                                sprintf_s(k0k, "%s.%03d.0x%p.%s", argv[1], i, file.hash, short_name);
+                            }
+
+                            outf = std::ofstream(k0k, std::fstream::binary);
+
+                            if (canDump) {
                                 auto lobyte_ = 8ui64;
                                 auto hibyte_ = 4ui64;
 
@@ -423,7 +433,33 @@ int main(int argc, char* argv[])
                                 std::printf("\t Type: %u | %u %u | %ux%u | %08X\n", texture_info->texture_type, texture_info->mipmaps, texture_info->unk22, texture_info->width, texture_info->height, pitchOrLinearSize);
 
                                 outf.write((const char*)dds_header, sizeof(dds_header));
-                            } else {
+                            }
+                            else if (dump2) {
+                                std::printf("\t %p Type: %u | %u %u | %ux%u\n", file.hash, texture_info->texture_type, texture_info->mipmaps, texture_info->unk22, texture_info->width, texture_info->height);
+
+                                // even more hacky...
+                                // TODO: make less resolution dependant
+                                constexpr auto add_offset = 0xA0000; // to biggest mipmap being full size
+                                constexpr auto file_size = 0x200000; // 2048x2048
+
+                                *(u32*)(dds_header + 0xC) = texture_info->height;
+                                *(u32*)(dds_header + 0x10) = texture_info->width;
+
+                                *(u32*)(dds_header + 0x14) = file_size;
+                                outf.write((const char*)dds_header, sizeof(dds_header));
+
+                                std::vector<uint8_t> tmpdat(file_size);
+                                auto tmpname = (const char*)rpak_data.data() + starpak_other;
+                                auto tmpfind = strrchr(tmpname, '\\') + 1;
+                                std::ifstream starpak(tmpfind, std::fstream::binary);
+                                starpak.seekg(file.starpak_offset + add_offset, std::fstream::beg);
+                                starpak.read((char*)tmpdat.data(), file_size);
+
+                                outf.write((const char*)tmpdat.data(), file_size);
+                                continue; // we want to skip the normal write from the rpak...
+                            }
+                            else {
+                                std::printf("\t %p Type: %u | %u %u | %ux%u\n", file.hash, texture_info->texture_type, texture_info->mipmaps, texture_info->unk22, texture_info->width, texture_info->height);
                                 std::printf("\t\tDON'T KNOW HOW TO DUMP!\n");
                             }
                         }

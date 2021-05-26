@@ -59,8 +59,15 @@ int main(int argc, char* argv[])
 
     std::cout << std::hex;
 
-    auto expected = std::hash<std::string>{}(to_hash);
     auto actual = hash_string((_DWORD*)to_hash.c_str());
+
+    for (auto& e : to_hash) {
+        if (e == '/' || e == '\\')
+            e = 0xf;
+        else
+            e = toupper(e);
+    }
+    auto expected = std::hash<std::string>{}(to_hash);
 
     std::printf("Expected hash: %" PRIx64 " [%llu]\nActual hash: %" PRIx64 " [%llu]\n", expected, expected & 0x1FFFF, actual, actual&0x1FFFF);
 }
